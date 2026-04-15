@@ -1,4 +1,4 @@
-import { importAdapter, importAdapterDynamic } from "../utils/imports/importAdapter";
+import { importAdapter, } from "../utils/imports/importAdapter";
 import { chainCoingeckoIds, getChainDisplayName, normalizeChain, transformNewChainName } from "../utils/normalizeChain";
 import protocols from "./data";
 import parentProtocols, { parentProtocolsById } from "./parentProtocols";
@@ -32,7 +32,7 @@ test("all the dynamic imports work", async () => {
   await Promise.all(treasuries.map(importAdapter))
 });
 
-const ignored = ['default', 'staking', 'pool2', 'treasury', "hallmarks", "borrowed", "ownTokens"]
+const ignored = ['default', 'staking', 'pool2', 'treasury', "hallmarks", "borrowed", "ownTokens", "meta"]
 test("all chains are on chainMap", async () => {
   const allProtocols = [protocols, treasuries].flat()
   for (const protocol of allProtocols) {
@@ -84,14 +84,15 @@ test("all chains are on chainMap", async () => {
  */
 test("valid treasury fields", async () => {
   const treasuryKeys = new Set(['ownTokens', 'tvl'])
-  const ignoredKeys = new Set(['default'])
+  const ignoredKeys = new Set(['default', 'hallmarks', 'meta'])
   await Promise.all(treasuries.map(async protocol => {
-    const module = await importAdapterDynamic(protocol)
+    const module = await importAdapter(protocol)
     for (const [chain, value] of Object.entries(module)) {
       if (typeof value !== 'object' || ignoredKeys.has(chain)) continue;
       for (const [key, _module] of Object.entries(value as Object)) {
-        if ((typeof _module !== 'function' && _module !== '_lmtf') || !treasuryKeys.has(key))
+        if ((typeof _module !== 'function' && (_module !== '_lmtf' && _module !== '_f')) || !treasuryKeys.has(key)) {
           throw new Error('Bad module for adapter: ' + protocol.name + ' in chain ' + chain + ' key:' + key)
+        }
       }
     }
   }))
@@ -119,7 +120,7 @@ test("governance on parent protocol when it exists", async () => {
 test("Github repo on parent protocol when it exists", async () => {
   const childs = protocols.filter(i => i.github && i.parentProtocol)
   if (childs.length)
-    console.log('Migrate Guthub config for: ', childs.map(i => i.name))
+    console.log('Migrate Github config for: ', childs.map(i => i.name))
   expect(childs.length).toBeLessThanOrEqual(0)
 });
 
@@ -133,7 +134,7 @@ test("Github: track only orgs", async () => {
 test("projects have a single chain or each chain has an adapter", async () => {
   for (const protocol of protocols) {
     if (protocol.module === 'dummy.js') continue;
-    const module = await importAdapterDynamic(protocol)
+    const module = await importAdapter(protocol)
     const chains = protocol.module.includes("volumes/") ? Object.keys(module) : protocol.chains.map((chain) => normalizeChain(chain));
     if (chains.length > 1) {
       chains.forEach((chain) => {
@@ -262,7 +263,7 @@ test("no surprise category", async () => {
     'Leveraged Farming',
     'RWA Lending',
     'Options Vault',
-    'Liquidity manager',
+    'Liquidity Manager',
     'Staking Pool',
     'Partially Algorithmic Stablecoin',
     'SoFi',
@@ -327,7 +328,8 @@ test("no surprise category", async () => {
     "Gamified Mining",
     "Secondary Debt Markets",
     "Block Builders",
-    "Stablecoin Wrapper"
+    "Stablecoin Wrapper",
+    "Crypto Card Issuer",
   ]
   for (const protocol of protocols) {
     expect(whitelistedCategories).toContain(protocol.category);

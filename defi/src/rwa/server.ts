@@ -99,6 +99,11 @@ function setRoutes(router: HyperExpress.Router): void {
             return fileResponse('id-map.json', res, 60);
         })
     );
+  
+    router.get('/chart/chain-breakdown', handleGetChartBreakdown('chain-breakdown'));
+    router.get('/chart/category-breakdown', handleGetChartBreakdown('category-breakdown'));
+    router.get('/chart/platform-breakdown', handleGetChartBreakdown('platform-breakdown'));
+    router.get('/chart/assetGroup-breakdown', handleGetChartBreakdown('assetGroup-breakdown'));
 
     // Get historical chart data for a specific RWA by ID
     router.get(
@@ -234,6 +239,32 @@ function setRoutes(router: HyperExpress.Router): void {
         })
     );
 
+    // Get historical chart data by assetGroup
+    router.get(
+        '/chart/assetGroup/:assetGroup',
+        errorWrapper(async (req, res) => {
+            const { assetGroup } = req.params;
+            if (!assetGroup) {
+                return errorResponse(res, 'Missing assetGroup parameter', 400);
+            }
+            const key = rwaSlug(assetGroup);
+            return fileResponse(`charts/assetGroup/${key}.json`, res, 30);
+        })
+    );
+
+    // Get historical chart data by assetGroup - breakdown by tickers
+    router.get(
+        '/chart/assetGroup/:assetGroup/ticker-breakdown',
+        errorWrapper(async (req, res) => {
+            const { assetGroup } = req.params;
+            if (!assetGroup) {
+                return errorResponse(res, 'Missing assetGroup parameter', 400);
+            }
+            const key = rwaSlug(assetGroup);
+            return fileResponse(`charts/assetGroup-ticker-breakdown/${key}.json`, res, 30);
+        })
+    );
+
     // Get specific RWA data by ID from current data
     router.get(
         '/rwa/:id',
@@ -316,6 +347,30 @@ function setRoutes(router: HyperExpress.Router): void {
         })
     );
 
+    // Get RWAs by assetGroup
+    router.get(
+        '/assetGroup/:assetGroup',
+        errorWrapper(async (req, res) => {
+            const { assetGroup } = req.params;
+            if (!assetGroup) {
+                return errorResponse(res, 'Missing assetGroup parameter', 400);
+            }
+
+            const currentData = await readRouteData('current.json');
+            if (!currentData) {
+                return errorResponse(res, 'Data not found', 500);
+            }
+
+            const assetGroupLower = assetGroup.toLowerCase();
+            const filtered = currentData.filter((item: any) => {
+                const itemAssetGroup = item.assetGroup;
+                return typeof itemAssetGroup === 'string' && itemAssetGroup.toLowerCase() === assetGroupLower;
+            });
+
+            return successResponse(res, { data: filtered, timestamp: currentData.timestamp }, 20);
+        })
+    );
+
     // Get RWAs by chain
     router.get(
         '/chain/:chain',
@@ -344,6 +399,30 @@ function setRoutes(router: HyperExpress.Router): void {
             return successResponse(res, { data: filtered, timestamp: currentData.timestamp }, 20);
         })
     );
+  
+    function handleGetChartBreakdown(breakdown: 'chain-breakdown' | 'category-breakdown' | 'platform-breakdown' | 'assetGroup-breakdown') {
+        return errorWrapper(async (req, res) => {
+            const { key, includeStablecoin, includeGovernance } = req.query;
+            
+            const queryKey = (key && ['onChainMcap', 'activeMcap', 'defiActiveTvl'].includes(String(key))) ? key : 'onChainMcap';
+            const queryIncludeStablecoin = includeStablecoin && String(includeStablecoin) === 'true';
+            const queryIncludeGovernance = includeGovernance && String(includeGovernance) === 'true';
+          
+            let filePath = `charts/${breakdown}`;
+            if (!queryIncludeStablecoin && !queryIncludeGovernance) {
+              filePath += '/base';
+            } else if (queryIncludeStablecoin && queryIncludeGovernance) {
+              filePath += '/all';
+            } else if (queryIncludeStablecoin && !queryIncludeGovernance) {
+              filePath += '/includestablecoin';
+            } else if (!queryIncludeStablecoin && queryIncludeGovernance) {
+              filePath += '/includegovernance';
+            }
+            filePath += `-${String(queryKey).toLowerCase()}.json`;
+          
+            return fileResponse(filePath, res, 30);
+        })
+    }
 }
 
 async function main() {

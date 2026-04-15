@@ -20,7 +20,19 @@ export async function storeEmissionsCache(): Promise<{error: string | null}> {
     const _emissionsData: any = await getR2JSONString(`emissions/${emissionsProtocolId}`);
     if (_emissionsData && _emissionsData.unlockUsdChart) {
       const hasBreakdownData = !!_emissionsData.componentData && !!_emissionsData.componentData.sections;
-      
+
+      if (hasBreakdownData) {
+        const breakdownMethodology: Record<string, string> = {};
+        for (const section of Object.values(_emissionsData.componentData.sections)) {
+          const s = section as any;
+          for (const component of Object.values(s.components || {})) {
+            const c = component as any;
+            if (c.methodology && c.name) breakdownMethodology[c.name] = c.methodology;
+          }
+        }
+        if (Object.keys(breakdownMethodology).length) emissionsProtocolData.breakdownMethodology = breakdownMethodology;
+      }
+
       for (const [timestamp, value] of _emissionsData.unlockUsdChart) {
         const firstDayOfMonthDate = getTimestampAtStartOfMonth(timestamp);
         const firstDayOfQuarterDate = getTimestampAtStartOfQuarter(firstDayOfMonthDate);
@@ -56,7 +68,7 @@ export async function storeEmissionsCache(): Promise<{error: string | null}> {
     for (const section of Object.values(sections)) {
       for (const component of Object.values((section as any).components)) {
         const compomentItem = component as any;
-        if (compomentItem.name && compomentItem.unlockUsdChart) {
+        if (compomentItem.name && compomentItem.unlockUsdChart && compomentItem.isIncentive) {
           const label = compomentItem.name;
           const item = compomentItem.unlockUsdChart.find((item: any) => item[0] === timestamp)
           if (item) {
